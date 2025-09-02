@@ -1,8 +1,10 @@
 import { Router, type Request, type Response } from 'express';
+import { getAuth } from '@clerk/express';
+import supabase from '../utils/supabase.js';
 
 const router = Router();
 
-type AnalyzeBody = {
+type NailHealthScanBody = {
   image_base64?: string; // data without prefix
   locale?: string; // optional i18n
 };
@@ -11,13 +13,13 @@ function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64');
 }
 
-router.post('/api/analyze-nail', async (req: Request, res: Response) => {
+router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
     }
 
-    const body = req.body as AnalyzeBody;
+    const body = req.body as NailHealthScanBody;
     if (!body) return res.status(400).json({ error: 'Missing body' });
 
     let imageBase64 = body.image_base64?.trim();
@@ -49,6 +51,7 @@ router.post('/api/analyze-nail', async (req: Request, res: Response) => {
         "staining_score": 0..100,
         "recommended_styles": ["array of 2-3 recommended nail shapes/styles based on their natural nails"],
         "recommended_color": "array of 2-3 recommended nail colors based on their natural nails",
+        "recommended_products": ["array of 2-3 recommended products based on the analysis"],
         "care_tips": ["array of 2-3 simple, non-medical tips (e.g., moisturize cuticles, use strengthening polish)"],
         "notes": "short summary string with overall impression"
       }
@@ -82,17 +85,66 @@ router.post('/api/analyze-nail', async (req: Request, res: Response) => {
     const content = json.choices?.[0]?.message?.content ?? '{}';
 
     // content should be a JSON string because of response_format
-    let analysis: unknown;
+    let analysis: any;
     try {
       analysis = typeof content === 'string' ? JSON.parse(content) : content;
     } catch {
       analysis = { summary: 'Unable to parse result', issues: [], recommendations: [], confidence: 0 };
     }
 
-    return res.json({ analysis });
+    // Insert into DB
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const payload = {
+      user_clerk_id: userId,
+      recommended_length: analysis?.recommended_length ?? null,
+      natural_shape: analysis?.natural_shape ?? null,
+      cuticle_health: analysis?.cuticle_health ?? null,
+      cuticle_health_score: analysis?.cuticle_health_score ?? null,
+      nail_strength: analysis?.nail_strength ?? null,
+      nail_strength_score: analysis?.nail_strength_score ?? null,
+      hydration: analysis?.hydration ?? null,
+      hydration_score: analysis?.hydration_score ?? null,
+      staining: analysis?.staining ?? null,
+      staining_score: analysis?.staining_score ?? null,
+      recommended_styles: Array.isArray(analysis?.recommended_styles) ? analysis.recommended_styles : null,
+      recommended_colors: Array.isArray(analysis?.recommended_colors) ? analysis.recommended_colors : null,
+      recommended_products: Array.isArray(analysis?.recommended_products) ? analysis.recommended_products : null,
+      care_tips: Array.isArray(analysis?.care_tips) ? analysis.care_tips : null,
+      notes: typeof analysis?.notes === 'string' ? analysis.notes : null,
+      raw_json: analysis ?? null
+    };
+
+    const { data, error } = await supabase
+      .from('nail_health_scans')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message, analysis });
+
+    return res.status(201).json({ analysis, record: data });
   } catch (err) {
     return res.status(500).json({ error: 'Unexpected error' });
   }
+});
+
+router.get('/api/nail-health-scan/latest', async (req: Request, res: Response) => {
+  const { userId } = getAuth(req);
+
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { data, error } = await supabase
+    .from('nail_health_scans')
+    .select('*')
+    .eq('user_clerk_id', userId)
+    .order('inserted_at', { ascending: false })
+    .limit(1);
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  return res.status(200).json({ data });
 });
 
 export default router;

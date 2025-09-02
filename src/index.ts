@@ -1,7 +1,8 @@
 import express, { Request, Response } from 'express';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
 import loadEnv from './utils/env.js';
-import analyzeRouter from './routes/analyze.js';
+import nailHealthScanRouter from './routes/nail-health-scan.js';
+import usersRouter from './routes/users.js';
 import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
@@ -25,7 +26,8 @@ app.get('/', (_req: Request, res: Response) => {
 app.use('/api', requireAuth());
 
 // Routes
-app.use(analyzeRouter);
+app.use(nailHealthScanRouter);
+app.use(usersRouter);
 
 const port = Number(process.env.PORT || 3001);
 app.listen(port, () => {

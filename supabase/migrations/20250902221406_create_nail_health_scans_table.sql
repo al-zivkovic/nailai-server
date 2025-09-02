@@ -1,0 +1,23 @@
+create table public.nail_health_scans (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null,
+    recommended_length varchar(255),
+    natural_shape varchar(255),
+    cuticle_health varchar(255),
+    cuticle_health_score int,
+    nail_strength varchar(255),
+    nail_strength_score int,
+    hydration varchar(255),
+    hydration_score int,
+    staining varchar(255),
+    staining_score int,
+    recommended_styles varchar(255)[],
+    recommended_colors varchar(255)[],
+    recommended_products varchar(255)[],
+    care_tips varchar(255)[],
+    notes varchar(255),
+    raw_json jsonb,
+    inserted_at timestamp with time zone default current_timestamp
+);
+
+create policy "Nail health scans can be viewed by the user" on public.nail_health_scans for select using (auth.uid() = user_id);
