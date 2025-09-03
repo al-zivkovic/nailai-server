@@ -6,7 +6,8 @@ node_modules
 
 # env
 .env
-.env.*
+.env.dev*
+.env.prod*
 
 # logs
 npm-debug.log*
