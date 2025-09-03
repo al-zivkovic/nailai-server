@@ -55,6 +55,12 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
         "care_tips": ["array of 2-3 simple, non-medical tips (e.g., moisturize cuticles, use strengthening polish)"],
         "notes": "short summary string with overall impression"
       }
+
+      Consider the following:
+      - If the images are not of a person's nails, you should return:
+      {
+        "notes": "Please provide an image of your nails."
+      }
     `;
 
     const oaRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -90,6 +96,16 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
       analysis = typeof content === 'string' ? JSON.parse(content) : content;
     } catch {
       analysis = { summary: 'Unable to parse result', issues: [], recommendations: [], confidence: 0 };
+    }
+
+    // If model indicates non-nail image, don't insert; return simple JSON
+    const pleaseProvideBase = 'Please provide an image of your nails';
+    const normalize = (s: string) => s.trim().replace(/\.$/, '');
+    if (
+      (typeof analysis === 'string' && normalize(analysis) === pleaseProvideBase) ||
+      (typeof analysis?.notes === 'string' && normalize(analysis.notes) === pleaseProvideBase)
+    ) {
+      return res.status(200).json({ notes: pleaseProvideBase });
     }
 
     // Insert into DB
