@@ -160,7 +160,28 @@ router.get('/api/nail-health-scan/latest', async (req: Request, res: Response) =
 
   if (error) return res.status(400).json({ error: error.message });
 
-  return res.status(200).json({ data });
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row) return res.status(200).json({ analysis: null });
+
+  const analysis = {
+    recommended_length: row.recommended_length ?? null,
+    natural_shape: row.natural_shape ?? null,
+    cuticle_health: row.cuticle_health ?? null,
+    cuticle_health_score: row.cuticle_health_score ?? null,
+    nail_strength: row.nail_strength ?? null,
+    nail_strength_score: row.nail_strength_score ?? null,
+    hydration: row.hydration ?? null,
+    hydration_score: row.hydration_score ?? null,
+    staining: row.staining ?? null,
+    staining_score: row.staining_score ?? null,
+    recommended_styles: row.recommended_styles ?? null,
+    recommended_colors: row.recommended_colors ?? null,
+    recommended_products: row.recommended_products ?? null,
+    care_tips: row.care_tips ?? null,
+    notes: row.notes ?? null,
+  };
+
+  return res.status(200).json({ analysis });
 });
 
 export default router;
