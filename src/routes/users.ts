@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { getAuth } from '@clerk/express';
-import supabase from '../utils/supabase.js';
+import getSupabase from '../utils/supabase.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ type CreateUserBody = {
   last_name?: string | null;
 };
 
-router.post('/api/users', async (req: Request, res: Response) => {
+router.post('/api/users/sign-up', async (req: Request, res: Response) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -19,13 +19,13 @@ router.post('/api/users', async (req: Request, res: Response) => {
     if (!body?.email) return res.status(400).json({ error: 'email is required' });
 
     const payload = {
-      user_clerk_id: userId,
+      clerk_id: userId,
       email: body.email,
       first_name: body.first_name ?? null,
       last_name: body.last_name ?? null
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('users')
       .insert(payload)
       .select()

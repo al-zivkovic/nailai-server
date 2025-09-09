@@ -19,5 +19,3 @@ create table public.nail_health_scans (
     raw_json jsonb,
     inserted_at timestamp with time zone default current_timestamp
 );
-
-create policy "Nail health scans can be viewed by the user" on public.nail_health_scans for select using (auth.uid() = user_id);

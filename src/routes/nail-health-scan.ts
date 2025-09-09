@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { getAuth } from '@clerk/express';
-import supabase from '../utils/supabase.js';
+import getSupabase from '../utils/supabase.js';
+import getOrCreateInternalUserId from '../utils/userLookup.js';
 
 const router = Router();
 
@@ -109,11 +110,10 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
     }
 
     // Insert into DB
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const internalUserId = await getOrCreateInternalUserId(req);
 
     const payload = {
-      user_clerk_id: userId,
+      user_id: internalUserId,
       recommended_length: analysis?.recommended_length ?? null,
       natural_shape: analysis?.natural_shape ?? null,
       cuticle_health: analysis?.cuticle_health ?? null,
@@ -132,7 +132,7 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
       raw_json: analysis ?? null
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('nail_health_scans')
       .insert(payload)
       .select()
@@ -151,10 +151,10 @@ router.get('/api/nail-health-scan/latest', async (req: Request, res: Response) =
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('nail_health_scans')
     .select('*')
-    .eq('user_clerk_id', userId)
+    .eq('user_id', (await getOrCreateInternalUserId(req)))
     .order('inserted_at', { ascending: false })
     .limit(1);
 
