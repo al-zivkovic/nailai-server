@@ -32,4 +32,13 @@ npm run dev
    - body: `{ image_base64: string }` or `{ storage_bucket: string, storage_path: string }`
    - returns: `{ analysis: { summary, issues[], recommendations[], confidence } }`
 
-Supabase integration will be added later.
+## Local Supabase Development
+1. Install Docker
+
+```bash
+supabase init
+supabase start
+supabase db reset
+```
+
+
