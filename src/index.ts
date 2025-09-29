@@ -3,6 +3,7 @@ import { clerkMiddleware, requireAuth } from '@clerk/express';
 import loadEnv from './utils/env.js';
 import nailHealthScanRouter from './routes/nail-health-scan.js';
 import usersRouter from './routes/users.js';
+import tryOnRouter from './routes/nail-customizer.js';
 import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
@@ -28,6 +29,7 @@ app.use('/api', requireAuth());
 // Routes
 app.use(nailHealthScanRouter);
 app.use(usersRouter);
+app.use(tryOnRouter);
 
 const port = Number(process.env.PORT || 3001);
 app.listen(port, () => {
