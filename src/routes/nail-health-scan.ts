@@ -106,7 +106,7 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
       (typeof analysis === 'string' && normalize(analysis) === pleaseProvideBase) ||
       (typeof analysis?.notes === 'string' && normalize(analysis.notes) === pleaseProvideBase)
     ) {
-      return res.status(200).json({ notes: pleaseProvideBase });
+      return res.status(422).json({ error: 'not_nail_image', message: pleaseProvideBase });
     }
 
     // Insert into DB
