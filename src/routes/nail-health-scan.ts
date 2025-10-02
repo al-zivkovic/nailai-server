@@ -16,6 +16,11 @@ function toBase64(bytes: Uint8Array): string {
 
 router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
   try {
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    // TODO: Send an internal error message to the server that the OPENAI_API_KEY is not configured to prevent the client's awareness of the use of OpenAI 
+    // TODO: Client error message should be: "We're experiencing technical difficulties. Please try again later."
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
     }

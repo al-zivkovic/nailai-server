@@ -21,6 +21,8 @@ router.post('/api/try-on', async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    // TODO: Send an internal error message to the server that the OPENAI_API_KEY is not configured to prevent the client's awareness of the use of OpenAI 
+    // TODO: Client error message should be: "We're experiencing technical difficulties. Please try again later."
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
     }
