@@ -4,6 +4,7 @@ import crypto from 'crypto';
 
 import getSupabase from '../utils/supabase.js';
 import getOrCreateInternalUserId from '../utils/userLookup.js';
+import { tryOnLimiter } from '../utils/rateLimit.js';
 
 const router = Router();
 
@@ -16,14 +17,15 @@ type TryOnBody = {
   finish?: string; // Glossy, Matte, Satin
 };
 
-router.post('/api/try-on', async (req: Request, res: Response) => {
+router.post('/api/try-on', tryOnLimiter, async (req: Request, res: Response) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const isMock = String(process.env.MOCK_API).toLowerCase() === 'true';
 
     // TODO: Send an internal error message to the server that the OPENAI_API_KEY is not configured to prevent the client's awareness of the use of OpenAI 
     // TODO: Client error message should be: "We're experiencing technical difficulties. Please try again later."
-    if (!process.env.OPENAI_API_KEY) {
+    if (!isMock && !process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
     }
 
@@ -51,6 +53,14 @@ router.post('/api/try-on', async (req: Request, res: Response) => {
     if (!validShapes.has(shape.toLowerCase())) return res.status(400).json({ error: 'Invalid shape' });
     if (!validLengths.has(length.toLowerCase())) return res.status(400).json({ error: 'Invalid length' });
     if (!validFinishes.has(finish.toLowerCase())) return res.status(400).json({ error: 'Invalid finish' });
+
+    if (isMock) {
+      return res.status(201).json({
+        image_url: 'mock://signed-url',
+        storage_bucket: 'mock',
+        storage_path: 'mock/path.png'
+      });
+    }
 
     const prompt = [
       'You are a professional nail retouching assistant.',
