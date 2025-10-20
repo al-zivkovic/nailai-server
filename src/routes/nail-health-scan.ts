@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { getAuth } from '@clerk/express';
 import getSupabase from '../utils/supabase.js';
 import getOrCreateInternalUserId from '../utils/userLookup.js';
+import { healthScanLimiter } from '../utils/rateLimit.js';
 
 const router = Router();
 
@@ -14,14 +15,15 @@ function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64');
 }
 
-router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
+router.post('/api/nail-health-scan', healthScanLimiter, async (req: Request, res: Response) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const isMock = String(process.env.MOCK_API).toLowerCase() === 'true';
     
     // TODO: Send an internal error message to the server that the OPENAI_API_KEY is not configured to prevent the client's awareness of the use of OpenAI 
     // TODO: Client error message should be: "We're experiencing technical difficulties. Please try again later."
-    if (!process.env.OPENAI_API_KEY) {
+    if (!isMock && !process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
     }
 
@@ -35,6 +37,27 @@ router.post('/api/nail-health-scan', async (req: Request, res: Response) => {
     // Guardrail: limit size (~5MB base64 => ~6.6MB data)
     if (imageBase64.length > 7_000_000) {
       return res.status(413).json({ error: 'Image too large' });
+    }
+
+    if (isMock) {
+      const analysis = {
+        recommended_length: 'short',
+        natural_shape: 'oval',
+        cuticle_health: 'healthy',
+        cuticle_health_score: 80,
+        nail_strength: 'normal',
+        nail_strength_score: 75,
+        hydration: 'normal',
+        hydration_score: 70,
+        staining: 'normal',
+        staining_score: 85,
+        recommended_styles: ['oval', 'almond'],
+        recommended_colors: ['#c0ffee', '#ff69b4'],
+        recommended_products: ['cuticle oil', 'strengthening polish'],
+        care_tips: ['moisturize cuticles', 'avoid harsh removers'],
+        notes: 'Mock analysis'
+      } as any;
+      return res.status(201).json({ analysis, record: null });
     }
 
     const prompt = `
