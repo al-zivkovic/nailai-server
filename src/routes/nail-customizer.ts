@@ -134,4 +134,97 @@ router.post('/api/try-on', tryOnLimiter, async (req: Request, res: Response) => 
   }
 });
 
+// Lightweight list endpoint: returns minimal fields with pagination
+router.get('/api/nail-customizations', async (req: Request, res: Response) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const supabase = getSupabase();
+    const internalUserId = await getOrCreateInternalUserId(req);
+
+    const limitParam = Number(req.query.limit ?? 10);
+    const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 50 ? Math.floor(limitParam) : 10;
+    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined; // ISO timestamp
+
+    let query = supabase
+      .from('nail_customizations')
+      .select('id, inserted_at, image_url, storage_bucket, storage_path')
+      .eq('user_id', internalUserId)
+      .is('deleted_at', null)
+      .order('inserted_at', { ascending: false })
+      .limit(limit + 1);
+
+    if (cursor) {
+      query = query.lte('inserted_at', cursor);
+    }
+
+    const { data, error } = await query;
+    if (error) return res.status(400).json({ error: error.message });
+
+    const rows = Array.isArray(data) ? data : [];
+    const hasMore = rows.length > limit;
+    const pageItems = hasMore ? rows.slice(0, limit) : rows;
+
+    // Sign URLs for private storage-backed items
+    const signed = await Promise.all(pageItems.map(async (row: any) => {
+      const bucket = row.storage_bucket as string | null | undefined;
+      const path = row.storage_path as string | null | undefined;
+      if (bucket && path) {
+        const signedRes = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+        const url = signedRes.data?.signedUrl ?? row.image_url;
+        return { id: row.id, inserted_at: row.inserted_at, image_url: url };
+      }
+      return { id: row.id, inserted_at: row.inserted_at, image_url: row.image_url };
+    }));
+
+    const nextCursor = hasMore ? pageItems[pageItems.length - 1].inserted_at : null;
+
+    return res.status(200).json({ customizations: signed, nextCursor });
+  } catch (err) {
+    return res.status(500).json({ error: 'Unexpected error' });
+  }
+});
+
+// Detail endpoint: returns full fields for a specific customization
+router.get('/api/nail-customizations/:id', async (req: Request, res: Response) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const supabase = getSupabase();
+    const internalUserId = await getOrCreateInternalUserId(req);
+    const id = String(req.params.id ?? '').trim();
+    if (!id) return res.status(400).json({ error: 'Missing id' });
+
+    const { data, error } = await supabase
+      .from('nail_customizations')
+      .select('*')
+      .eq('user_id', internalUserId)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .single();
+
+    if (error?.code === 'PGRST116' || !data) return res.status(404).json({ error: 'Not found' });
+    if (error) return res.status(400).json({ error: error.message });
+
+    let imageUrl = data.image_url as string | null;
+    if (data.storage_bucket && data.storage_path) {
+      const signedRes = await supabase.storage
+        .from(data.storage_bucket as string)
+        .createSignedUrl(data.storage_path as string, 60 * 60);
+      imageUrl = signedRes.data?.signedUrl ?? imageUrl;
+    }
+
+    return res.status(200).json({
+      customization: {
+        ...data,
+        image_url: imageUrl
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Unexpected error' });
+  }
+});
+
 export default router;
