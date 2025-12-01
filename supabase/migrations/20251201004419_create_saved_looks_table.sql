@@ -1,4 +1,4 @@
-create table public.nail_customizations (
+create table public.saved_looks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
   image_url text not null,
