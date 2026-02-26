@@ -35,7 +35,12 @@ router.post('/api/users/sign-up', async (req: Request, res: Response) => {
 
     return res.status(201).json({ user: data });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/users/sign-up:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 

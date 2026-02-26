@@ -20,7 +20,9 @@ npm run dev
 ## Environment
 
 - `PORT` (default 3001)
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (required for auth middleware)
+- `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (required for auth middleware)
+  - Note: `SUPABASE_SERVICE_ROLE_KEY` is also supported for backwards compatibility
+  - Use the **Secret Key** (not the Publishable Key) from your Supabase dashboard
 - `OPENAI_API_KEY` (required for analyze route)
 - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (required for rate limiting)
   - Dev: you can skip these locally by setting `DISABLE_RATE_LIMIT=true`
@@ -33,6 +35,53 @@ npm run dev
  - `POST /api/analyze-nail` → requires `Authorization: Bearer <supabase_jwt>`
    - body: `{ image_base64: string }` or `{ storage_bucket: string, storage_path: string }`
    - returns: `{ analysis: { summary, issues[], recommendations[], confidence } }`
+
+## Database Migrations
+
+To run migrations on your cloud Supabase instance:
+
+1. **Login to Supabase CLI** (if not already logged in):
+   ```bash
+   supabase login
+   ```
+
+2. **Link your project** to your cloud Supabase instance:
+   ```bash
+   npm run db:link
+   # Or: supabase link --project-ref your-project-ref
+   ```
+   You'll need your project reference ID (found in your Supabase dashboard URL or settings).
+
+3. **Push migrations** to the cloud database:
+   ```bash
+   npm run db:push
+   # Or: supabase db push
+   ```
+
+4. **Check migration status**:
+   ```bash
+   npm run db:status
+   # Or: supabase migration list
+   ```
+
+5. **Pull remote migrations** (if remote has migrations not in local):
+   ```bash
+   npm run db:pull
+   # Or: supabase db pull
+   ```
+   This will download any migrations that exist on the remote but not locally.
+
+6. **Repair migration history** (if you need to fix migration status):
+   ```bash
+   npm run db:repair -- --status reverted <migration-timestamp>
+   # Or: supabase migration repair --status reverted <migration-timestamp>
+   ```
+
+**Note:** Make sure you have the correct project linked before pushing migrations. The migrations will be applied in chronological order based on their filenames.
+
+**Troubleshooting:** If you get an error about "Remote migration versions not found in local migrations directory":
+- Option 1: Pull the missing migration: `npm run db:pull`
+- Option 2: If the migration isn't needed, repair it: `npm run db:repair -- --status reverted <migration-timestamp>`
 
 ## Local Supabase Development
 1. Install Docker

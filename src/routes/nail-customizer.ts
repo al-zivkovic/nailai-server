@@ -194,7 +194,12 @@ router.post('/api/try-on', tryOnLimiter, async (req: Request, res: Response) => 
       storage_path: objectPath
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/try-on:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 
@@ -297,7 +302,12 @@ router.post('/api/try-on/save', async (req: Request, res: Response) => {
 
     return res.status(201).json({ saved: true, id: data?.id ?? null, inserted_at: data?.inserted_at ?? null });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/try-on/save:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 })
 
@@ -337,7 +347,12 @@ router.get('/api/saved-looks', async (req: Request, res: Response) => {
 
     return res.status(200).json({ looks: signed });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/saved-looks:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 
@@ -378,7 +393,12 @@ router.get('/api/saved-looks/:id', async (req: Request, res: Response) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/saved-looks/:id:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 
@@ -408,7 +428,12 @@ router.delete('/api/saved-looks/:id', async (req: Request, res: Response) => {
 
     return res.status(200).json({ deleted: true, id: data.id });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in DELETE /api/saved-looks/:id:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 
