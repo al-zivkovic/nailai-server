@@ -6,9 +6,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "nodemon --exec tsx src/index.ts",
+    "prod:dev": "NODE_ENV=production nodemon --exec tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:push": "supabase db push",
+    "db:link": "supabase link",
+    "db:pull": "supabase db pull",
+    "db:status": "supabase migration list",
+    "db:repair": "supabase migration repair"
   },
   "keywords": [],
   "author": "",

@@ -170,7 +170,12 @@ router.post('/api/nail-health-scan', healthScanLimiter, async (req: Request, res
 
     return res.status(201).json({ analysis, record: data });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error' });
+    console.error('Error in /api/nail-health-scan:', err);
+    console.error('Stack:', err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: 'Unexpected error',
+      message: process.env.NODE_ENV === 'production' ? undefined : (err instanceof Error ? err.message : String(err))
+    });
   }
 });
 
