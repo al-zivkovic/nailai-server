@@ -3,6 +3,7 @@ import { getAuth } from '@clerk/express';
 import getSupabase from '../utils/supabase.js';
 import getOrCreateInternalUserId from '../utils/userLookup.js';
 import { healthScanLimiter } from '../utils/rateLimit.js';
+import { requireActiveSubscription } from '../middleware/requireSubscription.js';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64');
 }
 
-router.post('/api/nail-health-scan', healthScanLimiter, async (req: Request, res: Response) => {
+router.post('/api/nail-health-scan', healthScanLimiter, requireActiveSubscription(), async (req: Request, res: Response) => {
   try {
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });

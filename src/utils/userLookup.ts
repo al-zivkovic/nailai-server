@@ -11,23 +11,12 @@ export async function getOrCreateInternalUserId(req: any): Promise<string> {
     .from('users')
     .select('id')
     .eq('clerk_id', userId)
-    .single();
+    .maybeSingle();
 
+  if (selectError) throw selectError;
   if (existing?.id) return existing.id as string;
 
-  if (selectError && selectError.code !== 'PGRST116') {
-    // PGRST116 = No rows found for single() — safe to proceed to insert
-    throw selectError;
-  }
-
-  const { data: created, error: insertError } = await supabase
-    .from('users')
-    .insert({ clerk_id: userId })
-    .select('id')
-    .single();
-
-  if (insertError) throw insertError;
-  return created!.id as string;
+  throw new Error('User not found. Complete sign-in first.');
 }
 
 export default getOrCreateInternalUserId;

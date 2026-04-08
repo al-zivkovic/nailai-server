@@ -27,8 +27,7 @@ app.get('/health', async (_req: Request, res: Response) => {
   try {
     const env = process.env.NODE_ENV || 'development';
     const hasSupabaseUrl = !!process.env.SUPABASE_URL;
-    // Support both old and new env var names
-    const hasSupabaseKey = !!(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     
     // Test Supabase connection
     let supabaseStatus = 'not_configured';
@@ -36,7 +35,7 @@ app.get('/health', async (_req: Request, res: Response) => {
     let urlPreview = null;
     if (hasSupabaseUrl && hasSupabaseKey) {
       urlPreview = process.env.SUPABASE_URL?.substring(0, 30) + '...';
-      const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
       // Show first 8 and last 4 chars of key for debugging
       keyPreview = key.length > 12 
         ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}`
