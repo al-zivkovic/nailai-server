@@ -6,6 +6,7 @@ import getSupabase from '../utils/supabase.js';
 import getOrCreateInternalUserId from '../utils/userLookup.js';
 import { tryOnLimiter } from '../utils/rateLimit.js';
 import { requireActiveSubscription } from '../middleware/requireSubscription.js';
+import { normalizeInputImage } from '../utils/nailMask.js';
 
 const router = Router();
 
@@ -127,36 +128,81 @@ router.post('/api/try-on', tryOnLimiter, requireActiveSubscription(), async (req
     if (!validLengths.has(length.toLowerCase())) return res.status(400).json({ error: 'Invalid length' });
     if (!validFinishes.has(finish.toLowerCase())) return res.status(400).json({ error: 'Invalid finish' });
 
+    // ──────────────────────────────────────────────────────────────────
+    // Prompt-only try-on flow.
+    //
+    // We hand the input photo + a directive prompt to gpt-image-1 in
+    // /v1/images/edits mode (no mask). The model regenerates the image
+    // with the requested nails painted on. This drifts on backgrounds
+    // (text, fine detail) but produces more natural-looking nails than
+    // the mask + composite path. We accept the trade-off.
+    //
+    // We still normalize the input (PNG conversion, defensive scale-
+    // down for huge iPhone shots) and pick the closest gpt-image-1
+    // `size` so the output aspect matches the input.
+    // ──────────────────────────────────────────────────────────────────
+    const rawInputBuffer = Buffer.from(imageBase64, 'base64');
+    let normalized;
+    try {
+      normalized = await normalizeInputImage(rawInputBuffer);
+    } catch (err) {
+      console.error('[try-on] failed to normalize input image:', err);
+      return res.status(400).json({ error: 'invalid_image', message: 'Could not read the photo. Try a different one.' });
+    }
+
+    // Strong directive prompt. Structured headings ("EDIT TARGET" /
+    // "PRESERVATION RULES" / "CONSTRAINTS") tend to be weighted more
+    // heavily by gpt-image-1 than prose. Repeats key instructions
+    // (preserve background, no jewellery, photorealistic) which also
+    // helps with prompt-only editing.
     const prompt = [
-      'You are a professional nail retouching assistant.',
-      'Given a photo of a hand with natural nails, adjust ONLY the nail areas to match the requested style.',
-      'Do not modify skin tone, hand shape, background, lighting, or composition. Keep the image photorealistic.',
-      `Apply: color ${color}, shape ${shape}, length ${length}, finish ${finish}.`,
-      'Maintain the original pose and environment. Avoid artifacts like color spill or warped fingers.'
-    ].join(' ');
+      'You are a professional nail retouching assistant performing a localized edit.',
+      '',
+      'EDIT TARGET (modify ONLY these regions):',
+      '- The visible fingernails on the hand.',
+      `- Apply: color ${color} (use this exact hex), shape ${shape}, length ${length}, finish ${finish}.`,
+      '',
+      'PRESERVATION RULES (output MUST match the input image exactly outside the nail surface):',
+      '- Skin: tone, texture, freckles, veins, knuckle creases, hair, age spots, moles, scars.',
+      '- Hand: pose, finger positioning, finger thickness, knuckle shape, joints, palm visibility, wrist, watch/jewelry.',
+      '- Background: every pixel outside the nail region — color, texture, objects, depth-of-field blur.',
+      '- Lighting: direction, intensity, color temperature, shadows on skin.',
+      '- Camera: composition, framing, perspective, focal length, motion blur, grain.',
+      '- Cuticles and the finger-tip skin AROUND each nail. Do not paint onto skin.',
+      '',
+      'CONSTRAINTS:',
+      '- Do not change the orientation or pose of the hand in any way.',
+      "- Do not adjust the photo's overall color grading, exposure, or contrast.",
+      '- Do not add jewelry, rings, decals, glitter, or designs unless explicitly requested.',
+      '- Maintain photorealism. No illustration, painting, or stylization.',
+      '- Avoid color bleeding from the nail polish onto surrounding skin.',
+      '- If a finger is bent or partially visible, edit only the nail portion that IS visible.',
+      '',
+      'The output should be indistinguishable from the input photo except that the nails have been repainted with the requested style.',
+    ].join('\n');
 
-    const inputBuffer = Buffer.from(imageBase64, 'base64');
-
-    // Generate edited image via OpenAI Images API
+    // Generate edited image via OpenAI Images API (no mask).
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', prompt);
-    form.append('size', '1024x1024');
+    form.append('size', normalized.sizeParam);
     form.append('n', '1');
-    form.append('image', new Blob([inputBuffer], { type: 'image/png' }), 'input.png');
+    form.append('image', new Blob([new Uint8Array(normalized.png)], { type: 'image/png' }), 'input.png');
 
+    const editStart = Date.now();
     const oaRes = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: form
+      body: form,
     });
+    console.log(`[try-on] image edit took ${Date.now() - editStart}ms`);
 
     if (!oaRes.ok) {
       const detail = await oaRes.text().catch(() => 'OpenAI error');
       return res.status(502).json({ error: 'OpenAI request failed', detail });
     }
 
-    const oaJson = await oaRes.json().catch(() => null) as any;
+    const oaJson = (await oaRes.json().catch(() => null)) as any;
     const b64 = oaJson?.data?.[0]?.b64_json as string | undefined;
     if (!b64) return res.status(502).json({ error: 'Image generation failed' });
     const outputBuffer = Buffer.from(b64, 'base64');

@@ -4,9 +4,11 @@ node_modules
 # builds
 /dist
 
-# env
-.env.dev*
-.env.prod*
+# env — ignore every .env variant except the checked-in template.
+# Never commit real credentials.
+.env
+.env.*
+!.env.example
 
 # logs
 npm-debug.log*
