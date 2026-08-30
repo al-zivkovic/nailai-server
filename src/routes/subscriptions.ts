@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from 'express';
-import { getAuth } from '@clerk/express';
 import crypto from 'crypto';
 
 import getSupabase from '../utils/supabase.js';
@@ -99,27 +98,10 @@ export async function handleSuperwallWebhook(req: Request, res: Response) {
 
 router.post('/api/subscription/webhook', handleSuperwallWebhook);
 
-// Client calls this after a Superwall purchase to flip is_subscribed immediately
-router.post('/api/subscription/sync', async (req: Request, res: Response) => {
-  try {
-    const { userId } = getAuth(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const supabase = getSupabase();
-    const { error } = await supabase
-      .from('users')
-      .update({ is_subscribed: true, updated_at: new Date().toISOString() })
-      .eq('clerk_id', userId);
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    return res.status(200).json({ is_subscribed: true });
-  } catch (err) {
-    console.error('Error in POST /api/subscription/sync:', err);
-    return res.status(500).json({ error: 'Unexpected error' });
-  }
-});
+// NOTE: `POST /api/subscription/sync` was intentionally removed. It
+// unconditionally set `users.is_subscribed = true` for the authenticated
+// caller, with no proof of purchase — any authenticated client could
+// mark themselves subscribed by hitting it. The Superwall webhook
+// (signature-verified, above) is the ONLY writer to that column now.
 
 export default router;

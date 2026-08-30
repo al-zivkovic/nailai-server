@@ -13,7 +13,14 @@ const app = express();
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+// Image-bearing endpoints (try-on, nail-health-scan) accept base64
+// photos. The client downscales to ~1280 px wide and JPEG-compresses
+// before upload (see nailai-app/src/lib/prepareImage.ts), which lands
+// payloads comfortably under 1 MB. We allow 5 MB as headroom for edge
+// cases (very wide panoramas, retried bigger images, future endpoints
+// that pass additional metadata). Auth + per-user rate limits provide
+// the abuse ceiling.
+app.use(express.json({ limit: '5mb' }));
 app.use(morgan('dev'));
 app.use(clerkMiddleware());
 
@@ -22,50 +29,41 @@ app.get('/', (_req: Request, res: Response) => {
   res.send('nailai-server running');
 });
 
-// Health check endpoint (no auth required)
+// Health check endpoint (no auth required).
+//
+// SECURITY: this endpoint is publicly reachable, so it must never echo
+// any portion of a secret (not even a prefix/suffix preview). Any extra
+// diagnostic detail (error messages, URL previews) is only included
+// outside production to aid local debugging.
 app.get('/health', async (_req: Request, res: Response) => {
+  const env = process.env.NODE_ENV || 'development';
+  const isProd = env === 'production';
+
   try {
-    const env = process.env.NODE_ENV || 'development';
     const hasSupabaseUrl = !!process.env.SUPABASE_URL;
     const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     // Test Supabase connection
-    let supabaseStatus = 'not_configured';
-    let keyPreview = null;
-    let urlPreview = null;
+    let supabaseStatus: 'not_configured' | 'connected' | 'error' = 'not_configured';
+    let supabaseError: string | undefined;
+
     if (hasSupabaseUrl && hasSupabaseKey) {
-      urlPreview = process.env.SUPABASE_URL?.substring(0, 30) + '...';
-      const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-      // Show first 8 and last 4 chars of key for debugging
-      keyPreview = key.length > 12 
-        ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}`
-        : '***';
-      
       try {
         const { getSupabase } = await import('./utils/supabase.js');
         const supabase = getSupabase();
-        // Simple query to test connection
         const { error } = await supabase.from('users').select('id').limit(1);
         if (error) {
-          // Check if it's an auth error
-          if (error.message.includes('Invalid API key') || error.message.includes('JWT')) {
-            supabaseStatus = `error: Invalid API key - Make sure you're using the SECRET_KEY (not publishable key). Check your .env.prod file.`;
-          } else {
-            supabaseStatus = `error: ${error.message}`;
-          }
+          supabaseStatus = 'error';
+          supabaseError = error.message;
         } else {
           supabaseStatus = 'connected';
         }
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        if (errMsg.includes('Invalid API key') || errMsg.includes('JWT')) {
-          supabaseStatus = `error: Invalid API key - Make sure you're using the SECRET_KEY (not publishable key). Check your .env.prod file.`;
-        } else {
-          supabaseStatus = `error: ${errMsg}`;
-        }
+        supabaseStatus = 'error';
+        supabaseError = err instanceof Error ? err.message : String(err);
       }
     }
-    
+
     res.json({
       ok: true,
       env,
@@ -73,14 +71,14 @@ app.get('/health', async (_req: Request, res: Response) => {
         url_configured: hasSupabaseUrl,
         key_configured: hasSupabaseKey,
         status: supabaseStatus,
-        ...(urlPreview && { url_preview: urlPreview }),
-        ...(keyPreview && { key_preview: keyPreview })
-      }
+        // Only surface the error text in non-production environments.
+        ...(!isProd && supabaseError ? { error: supabaseError } : {}),
+      },
     });
   } catch (err) {
     res.status(500).json({
       ok: false,
-      error: err instanceof Error ? err.message : String(err)
+      ...(!isProd && { error: err instanceof Error ? err.message : String(err) }),
     });
   }
 });
